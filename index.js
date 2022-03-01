@@ -2,34 +2,75 @@ import mapData from "./map.json" assert { type: "json" };
 
 let map = JSON.parse(mapData);
 
-console.log(map);
+const ds = document.querySelector("#canvas-container");
 
-let width = 255; //map.info.width;
-let height = 255; //map.info.height;
-let res = map.info.resolution;
-let data = map.data;
+const img = new ImageViewer(map);
+const canvas = img.getCanvas();
+canvas.id = "myCanvas";
+ds.appendChild(canvas);
 
-const canvas = document.createElement("canvas");
-const ctx = canvas.getContext("2d");
+export default function ImageViewer(data) {
+  const BinaryParser = function BinaryParser(data, bytes) {
+    this.data = data;
+    this.bytes = bytes;
+    this.pointer = 0;
+  };
 
-ctx.width = width;
-canvas.width = width;
+  BinaryParser.prototype.getNextSample = function getNextSample() {
+    if (this.pointer >= this.data.length) return false;
 
-ctx.height = height;
-canvas.height = height;
+    let val = 0;
+    for (let i = 0; i < this.bytes; i += 1) {
+      val = val * 255 + this.data[(this.pointer += 1)];
+    }
 
-const img = ctx.getImageData(0, 0, width, height);
+    return val;
+  };
 
-for (var row = 0; row < height; row++) {
-  for (var col = 0; col < width; col++) {
-    const pos = (row * width + col) * 4;
+  const PGMFormatter = function PGMFormatter(width, height, maxVal) {
+    this.width = width;
+    this.height = height;
+    this.maxVal = maxVal;
+  };
 
-    img.data[pos] = 100 - data[pos];
-    img.data[pos + 1] = 100 - data[pos + 1];
-    img.data[pos + 2] = 100 - data[pos + 2];
-    img.data[pos + 3] = 100;
-  }
+  PGMFormatter.prototype.getCanvas = function getCanvas(parser) {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    ctx.width = this.width;
+    canvas.width = this.width;
+
+    ctx.height = this.height;
+    canvas.height = this.height;
+
+    const img = ctx.getImageData(0, 0, this.width, this.height);
+
+    for (let row = 0; row < this.height; row += 1) {
+      for (let col = 0; col < this.width; col += 1) {
+        const d = parser.getNextSample() * (255 / this.maxVal);
+        const pos = (row * this.width + col) * 4;
+
+        img.data[pos] = 255 - d;
+        img.data[pos + 1] = 255 - d;
+        img.data[pos + 2] = 255 - d;
+        img.data[pos + 3] = 255;
+      }
+    }
+
+    ctx.putImageData(img, 0, 0);
+    return canvas;
+  };
+
+  const width = 1920; //map.info.width;
+  const height = 1632; //map.info.height;
+  const imageData = map.data;
+  const maxVal = 255;
+  const bytes = maxVal < 256 ? 1 : 2;
+
+  this.parser = new BinaryParser(imageData, bytes);
+  this.formatter = new PGMFormatter(width, height, maxVal);
+
+  ImageViewer.prototype.getCanvas = function getCanvas() {
+    return this.formatter.getCanvas(this.parser);
+  };
 }
-
-ctx.putImageData(img, 0, 0);
-document.body.appendChild(canvas);
